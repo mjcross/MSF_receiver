@@ -5,7 +5,7 @@ from math import sqrt
 
 def main():
     debug = False
-    use_night = False
+    use_night = True
 
     if use_night:
         sample_file = 'MSF_10pm_1.txt'
