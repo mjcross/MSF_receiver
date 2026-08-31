@@ -4,7 +4,7 @@ from math import sqrt
     
 
 def main():
-    debug = True
+    debug = False
     use_night = True
 
     if use_night:
@@ -34,7 +34,7 @@ def main():
         print(f'using samples {sample_start_ms}ms - {sample_end_ms})')
 
     # decimate if required
-    decimation = 2
+    decimation = 1
     if decimation > 1:
         samples = samples[0::decimation]
         num_samples = len(samples)
