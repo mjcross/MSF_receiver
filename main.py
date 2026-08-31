@@ -5,7 +5,7 @@ from math import sqrt
 
 def main():
     debug = False
-    use_night = True
+    use_night = False
 
     if use_night:
         sample_file = 'MSF_10pm_1.txt'
@@ -111,7 +111,7 @@ def main():
     plt.figure()
     plt.plot(t_ms, samples)
     plt.plot(t_ms, data_plot/1e4)
-    plt.title('Detector output')
+    plt.title(sample_file)
     plt.xlabel('time (ms)')
 
     plt.show()
