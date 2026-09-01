@@ -5,7 +5,7 @@ from math import sqrt
 
 def main():
     debug = False
-    use_night = True
+    use_night = False
 
     if use_night:
         sample_file = 'MSF_10pm_1.txt'
@@ -82,16 +82,44 @@ def main():
 
     print(f'first spike {peak_index * sample_period * 1000:0.3f}ms')
 
-    # integrate energy over window after each spike
-    data_start_ms = 3.5     # 5 is a good conservative choice
+    #* calculate energy at 60KHz within a given window after each spike, using the Geortzel filter
+    #  TODO: apply a windowing function to improve the frequency discrimination
+    data_start_ms = 3     # 5 is a good conservative choice
     data_stop_ms = 7
     data_start = int(data_start_ms / 1000 * sample_rate)
     data_stop = int(data_stop_ms / 1000 * sample_rate)
+
+    # calculate Gortzel params (one-time work)
+    N = data_stop - data_start      # number of samples in the window
+    kc = N * 60_000 / sample_rate   # frequency bin number for 60kHz
+    wI = np.cos(2*np.pi * kc / N)
+    wQ = np.sin(2*np.pi * kc / N)
+
     data = []
     i = peak_index
     data_plot = np.zeros_like(t)
     while i + data_stop < num_samples:
-        x = sum(energy[i + data_start: i + data_stop])
+
+        signal_extract = samples[i + data_start: i + data_stop]
+        #signal_extract = signal_extract * np.hanning(N)
+
+        # ----- Goertzel filter -----
+        # calculate v(n) using the IIR
+        v1 = v2 = 0
+        for n in range(N):
+            v = 2 * wI * v1 - v2 + signal_extract[n]
+            v2 = v1
+            v1 = v
+        v = v1
+        v1 = v2
+
+        # calculate y(n) using the FIR
+        yI = v - wI * v1
+        yQ = wQ * v1
+        # ---------------------------
+
+        x = yI ** 2 + yQ ** 2       # power in 60kHz bin
+
         data.append(x)
         data_plot[i + data_start: i + data_stop] = x
 
@@ -110,7 +138,7 @@ def main():
 
     plt.figure()
     plt.plot(t_ms, samples)
-    plt.plot(t_ms, data_plot/1e4)
+    plt.plot(t_ms, data_plot/4e6)
     plt.title(sample_file)
     plt.xlabel('time (ms)')
 
