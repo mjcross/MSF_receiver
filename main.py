@@ -83,9 +83,8 @@ def main():
     print(f'first spike {peak_index * sample_period * 1000:0.3f}ms')
 
     #* calculate energy at 60KHz within a given window after each spike, using the Geortzel filter
-    #  TODO: apply a windowing function to improve the frequency discrimination
-    data_start_ms = 3     # 5 is a good conservative choice
-    data_stop_ms = 7
+    data_start_ms = 6     # 5 is a good conservative choice
+    data_stop_ms = 7.25
     data_start = int(data_start_ms / 1000 * sample_rate)
     data_stop = int(data_stop_ms / 1000 * sample_rate)
 
@@ -97,10 +96,21 @@ def main():
 
     data = []
     i = peak_index
+    spike_num = 1
     data_plot = np.zeros_like(t)
     while i + data_stop < num_samples:
 
         signal_extract = samples[i + data_start: i + data_stop]
+        signal_extract = signal_extract * np.hanning(N)
+
+        if spike_num == 6 or spike_num == 8 or spike_num == 59:
+            plt.figure()
+            plt.magnitude_spectrum(signal_extract, sample_rate)
+            plt.title(f'spike {spike_num}')
+            plt.grid(linestyle=':')
+            plt.ylim(0,100)
+
+
         #signal_extract = signal_extract * np.hanning(N)
 
         # ----- Goertzel filter -----
@@ -135,10 +145,11 @@ def main():
                 peak = power[j]
                 peak_index = j
         i = peak_index
+        spike_num += 1
 
     plt.figure()
     plt.plot(t_ms, samples)
-    plt.plot(t_ms, data_plot/4e6)
+    plt.plot(t_ms, data_plot/2e5)
     plt.title(sample_file)
     plt.xlabel('time (ms)')
 
