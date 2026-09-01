@@ -33,12 +33,17 @@ def main():
         num_samples = len(samples)
         print(f'using samples {sample_start_ms}ms - {sample_end_ms})')
 
-    # decimate if required
-    decimation = 1
+    #! note: this now preserves the max and min values but only decimates at HALF the 'advertised' rate
+    # decimate if required (by peak sample)
+    decimation = 20
     if decimation > 1:
-        samples = samples[0::decimation]
+        new_samples = []
+        for i in range(0, num_samples, decimation):
+            new_samples.append(max(samples[i: i + decimation]))
+            new_samples.append(min(samples[i: i + decimation]))
+        samples = new_samples
         num_samples = len(samples)
-        sample_rate /= decimation
+        sample_rate /= (decimation / 2)
 
 
     # remove bias
@@ -83,8 +88,8 @@ def main():
     print(f'first spike {peak_index * sample_period * 1000:0.3f}ms')
 
     # integrate energy over window after each spike
-    data_start_ms = 3.5     # 5 is a good conservative choice
-    data_stop_ms = 7
+    data_start_ms = 5     # 5 is a good conservative choice
+    data_stop_ms = 7.25
     data_start = int(data_start_ms / 1000 * sample_rate)
     data_stop = int(data_stop_ms / 1000 * sample_rate)
     data = []
