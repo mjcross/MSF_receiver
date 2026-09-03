@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 from math import sqrt
     
 def main():
-    debug = False
+    debug = True
     use_energy = False
-    use_night = True
+    use_night = False
 
     if use_energy:
         sample_file = 'energy_6pm_1.txt'
@@ -19,6 +19,7 @@ def main():
 
     #* read samples from file
     samples = np.loadtxt(sample_file)
+    samples -= np.mean(samples)
     num_samples = len(samples)
     print(f'Read {num_samples:,} samples from {sample_file} at {sample_rate/1000}ks/s ({1000*num_samples/sample_rate:0.3f}ms)')
 
@@ -37,7 +38,7 @@ def main():
         print(f'using samples {sample_start_ms}ms - {sample_end_ms})')
 
     if not use_energy:
-        # peak hold and convert voltage sampes to energy
+        # peak hold and convert voltage samples to energy
         decimation = int(sample_rate / 25_000)
         new_samples = []
         i = 0
