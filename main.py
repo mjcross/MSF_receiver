@@ -2,24 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import sqrt
     
-
 def main():
+    sample_file = 'energy_6pm_1.txt'
+    sample_rate = 25_000
     debug = False
-    use_night = True
 
-    if use_night:
-        sample_file = 'MSF_10pm_1.txt'
-        sample_rate = 250_000
-    else:
-        sample_file = 'MSF_9am_3.txt'
-        sample_rate = 240_000
-
-    # read samples from file
+    #* read samples from file
     samples = np.loadtxt(sample_file)
     num_samples = len(samples)
     print(f'Read {num_samples:,} samples from {sample_file} at {sample_rate/1000}ks/s ({1000*num_samples/sample_rate:0.3f}ms)')
 
-    # trim to specific range of samples (use '0' for all samples)
+    #* trim to specific range of samples if required
     sample_start_ms = 0
     sample_end_ms = 0     # '0' for all samples
     assert(sample_end_ms >= sample_start_ms)
@@ -33,91 +26,107 @@ def main():
         num_samples = len(samples)
         print(f'using samples {sample_start_ms}ms - {sample_end_ms})')
 
-    #! note: this now preserves the max and min values but only decimates at HALF the 'advertised' rate
-    # decimate if required (by peak sample)
-    decimation = 20
-    if decimation > 1:
-        new_samples = []
-        for i in range(0, num_samples, decimation):
-            new_samples.append(max(samples[i: i + decimation]))
-            new_samples.append(min(samples[i: i + decimation]))
-        samples = new_samples
-        num_samples = len(samples)
-        sample_rate /= (decimation / 2)
 
-
-    # remove bias
-    samples -= np.mean(samples)
-
-    # create timebase
+    #* create timebase
     sample_period = 1/sample_rate
     T = num_samples * sample_period
     t = np.linspace(sample_period, T, num_samples)
     t_ms = 1000 * t
 
-    # calculate sliding integral of energy in a period
-    energy = np.power(samples, 2)
-    bin_ms = 2.5
-    binsz = int(bin_ms/1000 * sample_rate)
-
-    power = np.zeros_like(t)
-    s = sum(energy[0: binsz])
-    for i in range(binsz, num_samples - 1):
-        power[i] = s
-        s -= energy[i - binsz]
-        s += energy[i + 1]
-
-    if debug:
-        plt.figure()
-        plt.plot(t_ms, samples)
-        plt.plot(t_ms, power / 200e3)
-        plt.title(f'sliding integral of energy ({bin_ms}ms)')
-        plt.xlabel('time (ms)')
-
-
-    # find first peak (will be bin_ms after the start of the first spike)
+    #* find first peak (will be bin_ms after the start of the first spike)
     spike_window_ms = 12.5
     spike_window = int(spike_window_ms / 1000 * sample_rate)
     peak_index = 0
     peak = 0
     for i in range(0, spike_window):
-        if power[i] > peak:
-            peak = power[i]
+        if samples[i] > peak:
+            peak = samples[i]
             peak_index = i
 
     print(f'first spike {peak_index * sample_period * 1000:0.3f}ms')
 
-    # integrate energy over window after each spike
-    data_start_ms = 5     # 5 is a good conservative choice
-    data_stop_ms = 7.25
-    data_start = int(data_start_ms / 1000 * sample_rate)
-    data_stop = int(data_stop_ms / 1000 * sample_rate)
-    data = []
+    # locate 'main' spikes
+    spike_plot = np.zeros_like(t)
+
     i = peak_index
-    data_plot = np.zeros_like(t)
-    while i + data_stop < num_samples:
-        x = sum(energy[i + data_start: i + data_stop])
-        data.append(x)
-        data_plot[i + data_start: i + data_stop] = x
+
+    #* locate main spikes
+    peak_search_start_ms = 9
+    peak_search_stop_ms = 11
+    peak_search_start = int(peak_search_start_ms / 1000 * sample_rate)
+    peak_search_stop = int(peak_search_stop_ms / 1000 * sample_rate)
+
+    spikes = []
+    while (i + peak_search_stop) < num_samples:
+        spikes.append(i)
+        spike_plot[i] = 1
 
         # find next peak
-        peak_search_start_ms = 9
-        peak_search_stop_ms = 11
-        peak_search_start = int(peak_search_start_ms / 1000 * sample_rate)
-        peak_search_stop = int(peak_search_stop_ms / 1000 * sample_rate)
         peak = 0
         peak_index = 0
         for j in range(i + peak_search_start, i + peak_search_stop):
-            if power[j] > peak:
-                peak = power[j]
+            if samples[j] > peak:
+                peak = samples[j]
                 peak_index = j
         i = peak_index
 
+    #* calculate min spike period
+    spike_period = min(np.diff(spikes))
+    spike_period_ms = spike_period * sample_period * 1000
+    print(f'min spike period {spike_period_ms:.3f}ms ({1000/spike_period_ms:.3f}Hz)')
+
+    #* mean energy in samples below threshold
+    centile = 75
+    threshold = np.quantile(samples, centile/100)
+    mask = np.zeros_like(t)
+    for i in range(num_samples):
+        if samples[i] < threshold:
+            mask[i] = samples[i]
+
+    if debug:
+        plt.figure()
+        plt.plot(t_ms, samples)
+        plt.plot(t_ms, mask)
+        plt.title(sample_file)
+        plt.xlabel('time (ms)')
+
+    #* take mean of samples below threshold in each spike period
+    mean_plot = np.zeros_like(t)
+    means = []
+    for spike_index in spikes:
+        if spike_index + spike_period <= num_samples:
+            total = 0
+            num = 0
+            for i in range(0, spike_period):
+                if samples[i + spike_index] < threshold:
+                    total += samples[i + spike_index]
+                    num += 1
+            means.append(total / num)
+            mean_plot[spike_index:] = means[-1]
+
+    #* rebase to median detector output
+    #mid = 0.5* (max(mean_plot[spikes[0]:]) + min(mean_plot[spikes[0]:]))
+    mid = np.mean(means)
+    mean_plot[:spikes[0]] = mid
+    mean_plot -= mid
+    means -= mid
+
+    #* integrate means over previous 100ms bit period
+    det_plot = np.zeros_like(t)
+    det = []
+    win_len = int(100 / spike_period_ms)
+    for i in range(len(means)):
+        det.append(sum(means[max(0, i - win_len): i]) / win_len)
+        det_plot[spikes[0] + i * spike_period:] = det[-1]
+
+
     plt.figure()
-    plt.plot(t_ms, samples)
-    plt.plot(t_ms, data_plot/1e4)
+    plt.plot(t_ms, mean_plot, label=f'10ms mean < {centile}th centile')
+    plt.plot(t_ms, det_plot, label='trailing 100ms integral')
     plt.title(sample_file)
     plt.xlabel('time (ms)')
+    plt.grid(linestyle=':')
+    plt.legend()
 
     plt.show()
 
