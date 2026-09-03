@@ -3,9 +3,19 @@ import matplotlib.pyplot as plt
 from math import sqrt
     
 def main():
-    sample_file = 'energy_6pm_1.txt'
-    sample_rate = 25_000
     debug = False
+    use_energy = False
+    use_night = True
+
+    if use_energy:
+        sample_file = 'energy_6pm_1.txt'
+        sample_rate = 25_000
+    elif use_night:
+        sample_file = 'MSF_10pm_1.txt'
+        sample_rate = 250_000
+    else:
+        sample_file = 'MSF_9am_3.txt'
+        sample_rate = 240_000
 
     #* read samples from file
     samples = np.loadtxt(sample_file)
@@ -25,6 +35,18 @@ def main():
         samples = samples[first_index: last_index]
         num_samples = len(samples)
         print(f'using samples {sample_start_ms}ms - {sample_end_ms})')
+
+    if not use_energy:
+        # peak hold and convert voltage sampes to energy
+        decimation = int(sample_rate / 25_000)
+        new_samples = []
+        i = 0
+        while i + decimation < num_samples:
+            new_samples.append(max(samples[i: i + decimation]) ** 2)
+            i += decimation
+        samples = new_samples
+        num_samples = len(samples)
+        sample_rate /= decimation
 
 
     #* create timebase
